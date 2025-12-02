@@ -1,219 +1,397 @@
 #!/bin/bash
 
-# Simple Vertical List k9s Cluster Switcher
+# ============================================
+# K9S CLUSTER SWITCHER - AUTO LOAD
+# ============================================
+
+# Configuration
 RANCHER_DIR="${HOME}/.kube/rancher_prod"
 MAIN_CONFIG="${HOME}/.kube/config"
 BACKUP_DIR="${HOME}/.kube/backups"
+SOURCE_YAML_DIR="./YAML"
+SETUP_FLAG_FILE="${HOME}/.kube/rancher_prod_setup_complete"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-ORANGE='\033[0;33m'
-WHITE='\033[1;37m'
-NC='\033[0m' # No Color
+BLUE='\033[38;5;39m'
+GREEN='\033[38;5;46m'
+YELLOW='\033[38;5;226m'
+ORANGE='\033[38;5;214m'
+RED='\033[38;5;196m'
+PURPLE='\033[38;5;129m'
+GRAY='\033[38;5;245m'
+WHITE='\033[38;5;255m'
+NC='\033[0m'
 
-# Symbols
-ARROW="➤"
-CHECK="✅"
-ROCKET="🚀"
-CLUSTER="🎯"
-EXIT="🚪"
-REFRESH="🔄"
-BACK="↩️"
-
-# Ensure backup directory exists
+# Ensure directories exist
 mkdir -p "$BACKUP_DIR"
+
+# ============================================
+# SETUP FUNCTIONS
+# ============================================
+
+setup_initial_config() {
+    clear
+    
+    # Create rancher_prod directory
+    if [ ! -d "$RANCHER_DIR" ]; then
+        mkdir -p "$RANCHER_DIR"
+    fi
+    
+    # Check if source directory exists
+    if [ ! -d "$SOURCE_YAML_DIR" ]; then
+        echo -e "${RED}Error: Source YAML directory not found${NC}"
+        exit 1
+    fi
+    
+    yaml_count=$(find "$SOURCE_YAML_DIR" -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | wc -l | tr -d ' ')
+    
+    if [ $yaml_count -eq 0 ]; then
+        echo -e "${YELLOW}No YAML files found${NC}"
+        exit 1
+    fi
+    
+    echo -e "${BLUE}Processing $yaml_count YAML files...${NC}"
+    
+    processed_count=0
+    for source_file in "$SOURCE_YAML_DIR"/*.yaml "$SOURCE_YAML_DIR"/*.yml; do
+        if [ -f "$source_file" ]; then
+            filename=$(basename "$source_file")
+            
+            awk '
+            BEGIN { skip = 0 }
+            /certificate-authority-data:/ { 
+                skip = 1; 
+                next 
+            }
+            skip && /^[[:space:]]/ { next }
+            skip && /^[^[:space:]]/ { skip = 0 }
+            { print }
+            ' "$source_file" > "$RANCHER_DIR/$filename"
+            
+            if [ -f "$RANCHER_DIR/$filename" ]; then
+                processed_count=$((processed_count + 1))
+            fi
+        fi
+    done
+    
+    echo -e "${GREEN}Setup complete! $processed_count files processed${NC}"
+    touch "$SETUP_FLAG_FILE"
+    sleep 1
+    clear
+}
+
+install_k9s_with_brew() {
+    echo -e "\n${BLUE}Installing k9s via Homebrew...${NC}"
+    
+    if ! command -v brew &> /dev/null; then
+        echo -e "${RED}Homebrew not installed${NC}"
+        exit 1
+    fi
+    
+    brew update > /dev/null 2>&1
+    brew install k9s > /dev/null 2>&1
+    echo -e "${GREEN}k9s installed${NC}"
+    sleep 1
+}
+
+check_and_install_k9s() {
+    if ! command -v k9s &> /dev/null; then
+        echo -e "${YELLOW}k9s not installed${NC}"
+        install_k9s_with_brew
+    fi
+}
+
+# ============================================
+# UI FUNCTIONS
+# ============================================
+
+get_terminal_width() {
+    tput cols 2>/dev/null || echo 100
+}
+
+get_environment_color() {
+    local name="$1"
+    local lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+    
+    if [[ $lower_name =~ production|prod ]] && [[ ! $lower_name =~ non-prod|nonprod|staging|uat|sit|test ]]; then
+        echo "$RED"
+    elif [[ $lower_name =~ staging|stage ]]; then
+        echo "$ORANGE"
+    elif [[ $lower_name =~ uat|useracceptance ]]; then
+        echo "$PURPLE"
+    elif [[ $lower_name =~ sit|systemintegration ]]; then
+        echo "$GREEN"
+    elif [[ $lower_name =~ test|testing ]]; then
+        echo "$YELLOW"
+    elif [[ $lower_name =~ dev|development ]]; then
+        echo "$BLUE"
+    elif [[ $lower_name =~ perf|performance|load ]]; then
+        echo "$PURPLE"
+    else
+        echo "$WHITE"
+    fi
+}
+
+get_environment_tag() {
+    local name="$1"
+    local lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+    
+    if [[ $lower_name =~ production|prod ]]; then
+        echo "[PROD]"
+    elif [[ $lower_name =~ staging|stage ]]; then
+        echo "[STAGE]"
+    elif [[ $lower_name =~ uat|useracceptance ]]; then
+        echo "[UAT]"
+    elif [[ $lower_name =~ sit|systemintegration ]]; then
+        echo "[SIT]"
+    elif [[ $lower_name =~ test|testing ]]; then
+        echo "[TEST]"
+    elif [[ $lower_name =~ dev|development ]]; then
+        echo "[DEV]"
+    elif [[ $lower_name =~ perf|performance|load ]]; then
+        echo "[PERF]"
+    else
+        echo "[OTHER]"
+    fi
+}
+
+format_cluster_name() {
+    local name="$1"
+    name="${name%.*}"
+    echo "$name" | sed -e 's/[_-]/ /g' -e 's/ v5 / V5 /g' -e 's/ v1 / V1 /g' -e 's/\bv5\b/V5/g' -e 's/\bv1\b/V1/g'
+}
+
+# ============================================
+# CLUSTER DISPLAY
+# ============================================
 
 show_current_context() {
     if [ -f "$MAIN_CONFIG" ]; then
         current_ctx=$(kubectl config current-context 2>/dev/null || echo "None")
-        echo -e "${CYAN}📋 Current Context: ${GREEN}$current_ctx${NC}"
+        echo -e "${GRAY}Current: ${WHITE}$current_ctx${NC}"
     else
-        echo -e "${YELLOW}📋 Current Context: ${RED}None${NC}"
+        echo -e "${GRAY}Current: ${RED}None${NC}"
     fi
 }
 
 get_all_clusters() {
     clusters=()
-    for file in "$RANCHER_DIR"/*.yaml "$RANCHER_DIR"/*.yml; do
+    while IFS= read -r file; do
         if [ -f "$file" ]; then
             clusters+=("$file")
         fi
-    done
+    done < <(find "$RANCHER_DIR" -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | sort)
 }
 
-create_cluster_map() {
-    cluster_map=()
-    local counter=1
+calculate_column_width() {
+    local clusters=("$@")
+    local max_length=0
     
     for cluster in "${clusters[@]}"; do
-        cluster_map[$counter]="$cluster"
-        counter=$((counter + 1))
+        cluster_name=$(basename "$cluster")
+        display_name=$(format_cluster_name "$cluster_name")
+        tag=$(get_environment_tag "$cluster_name")
+        
+        local length=$(( ${#tag} + ${#display_name} + 5 ))
+        if [ $length -gt $max_length ]; then
+            max_length=$length
+        fi
     done
+    
+    echo $max_length
 }
 
-show_simple_menu() {
+show_optimized_menu() {
     clear
-    
-    # Get all clusters
-    get_all_clusters
-    
-    # Create the cluster mapping
-    create_cluster_map
-    
+    echo -e "${BLUE}K9S CLUSTER MANAGER${NC}"
     show_current_context
     echo ""
     
-    echo -e "${WHITE}${CLUSTER} Available Clusters:${NC}"
-    echo ""
+    get_all_clusters
+    local total_clusters=${#clusters[@]}
     
-    if [ ${#clusters[@]} -eq 0 ]; then
-        echo -e "${RED}❌ No cluster files found in: $RANCHER_DIR${NC}"
-        exit 1
+    if [ $total_clusters -eq 0 ]; then
+        echo -e "${YELLOW}No clusters found${NC}"
+        return 1
     fi
     
-    # Simple numbered list
-    for i in "${!clusters[@]}"; do
-        cluster_path="${clusters[$i]}"
-        cluster_name=$(basename "$cluster_path")
-        display_name="${cluster_name%.*}"
-        
-        # Color code based on environment
-        lower_name=$(echo "$cluster_name" | tr '[:upper:]' '[:lower:]')
-        
-        if [[ $lower_name =~ production|prod ]] && [[ ! $lower_name =~ non-prod|nonprod|staging|uat|sit|test ]]; then
-            color=$RED
-            env="[PROD]"
-        elif [[ $lower_name =~ uat|useracceptance ]]; then
-            color=$CYAN
-            env="[UAT] "
-        elif [[ $lower_name =~ sit|systemintegration ]]; then
-            color=$GREEN
-            env="[SIT] "
-        elif [[ $lower_name =~ test|testing ]] && [[ ! $lower_name =~ production|prod ]]; then
-            color=$YELLOW
-            env="[TEST]"
-        elif [[ $lower_name =~ perf|performance|load ]]; then
-            color=$ORANGE
-            env="[PERF]"
-        else
-            color=$WHITE
-            env="[OTHER]"
+    # Calculate optimal layout
+    local terminal_width=$(get_terminal_width)
+    local col_width=$(calculate_column_width "${clusters[@]}")
+    local clusters_per_col=$(( (total_clusters + 1) / 2 ))
+    
+    # Adjust column width based on terminal size
+    if [ $((col_width * 2 + 8)) -gt $terminal_width ]; then
+        col_width=$(( (terminal_width - 8) / 2 ))
+    fi
+    
+    echo -e "${WHITE}Available Clusters:${NC}"
+    echo ""
+    
+    # Display in two columns
+    for ((i=0; i<clusters_per_col; i++)); do
+        # Left column
+        idx1=$i
+        if [ $idx1 -lt $total_clusters ]; then
+            cluster_path="${clusters[$idx1]}"
+            cluster_name=$(basename "$cluster_path")
+            display_name=$(format_cluster_name "$cluster_name")
+            tag=$(get_environment_tag "$cluster_name")
+            color=$(get_environment_color "$cluster_name")
+            number=$((idx1 + 1))
+            
+            printf "  ${color}%2d) ${tag} %-${col_width}s${NC}" "$number" "$display_name"
         fi
         
-        number=$((i + 1))
-        printf "  ${color}%2d) ${env} %s${NC}\n" "$number" "$display_name"
+        # Right column
+        idx2=$((i + clusters_per_col))
+        if [ $idx2 -lt $total_clusters ]; then
+            cluster_path="${clusters[$idx2]}"
+            cluster_name=$(basename "$cluster_path")
+            display_name=$(format_cluster_name "$cluster_name")
+            tag=$(get_environment_tag "$cluster_name")
+            color=$(get_environment_color "$cluster_name")
+            number=$((idx2 + 1))
+            
+            printf "  ${color}%2d) ${tag} %s${NC}" "$number" "$display_name"
+        fi
+        
+        echo ""
     done
     
     echo ""
-    echo -e "${CYAN}📊 Total clusters available: ${GREEN}${#clusters[@]}${NC}"
+    echo -e "${BLUE}────────────────────────────────────────────────────────────────────${NC}"
+    echo -e "${GRAY}Total: ${WHITE}$total_clusters${GRAY} clusters${NC}"
     echo ""
     
-    echo -e "${WHITE}${ARROW} Navigation:${NC}"
-    echo -e "  ${GREEN}1-${#clusters[@]}${WHITE} - Select cluster and launch k9s"
-    echo -e "  ${YELLOW}r${WHITE}     - Refresh cluster list"
-    echo -e "  ${RED}q${WHITE}     - Quit"
+    # Navigation menu
+    echo -e "${WHITE}Navigation:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1-$total_clusters${WHITE}  Select cluster"
+    echo -e "  ${YELLOW}r${WHITE}            Refresh list"
+    echo -e "  ${BLUE}s${WHITE}            Run setup"
+    echo -e "  ${PURPLE}k${WHITE}            Install k9s"
+    echo -e "  ${RED}q${WHITE}            Quit"
     echo ""
 }
 
+# ============================================
+# CLUSTER OPERATIONS
+# ============================================
+
 switch_to_cluster() {
-    cluster_path="$1"
-    cluster_name=$(basename "$cluster_path")
+    local cluster_path="$1"
+    local cluster_name=$(basename "$cluster_path")
+    local display_name=$(format_cluster_name "$cluster_name")
     
-    echo -e "\n${YELLOW}${REFRESH} Switching to: ${WHITE}$cluster_name${NC}"
+    echo ""
+    echo -e "${BLUE}────────────────────────────────────────────${NC}"
+    echo -e "${BLUE}Switching to: ${WHITE}$display_name${NC}"
+    echo -e "${BLUE}────────────────────────────────────────────${NC}"
     
-    # Backup current config
     if [ -f "$MAIN_CONFIG" ]; then
         cp "$MAIN_CONFIG" "$BACKUP_DIR/config.backup.$(date +%Y%m%d_%H%M%S)"
     fi
     
-    # Switch cluster
     cp "$cluster_path" "$MAIN_CONFIG"
     export KUBECONFIG="$MAIN_CONFIG"
     
-    # Test connection
-    echo -e "${CYAN}🔍 Testing connection...${NC}"
-    if kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then
-        echo -e "${GREEN}${CHECK} Cluster connection successful${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Cluster may be offline or require VPN${NC}"
-    fi
+    echo -e "${GRAY}Testing connection...${NC}"
+    kubectl cluster-info --request-timeout=3s >/dev/null 2>&1 && \
+        echo -e "${GREEN}Connected${NC}" || \
+        echo -e "${YELLOW}May require VPN${NC}"
     
-    new_context=$(kubectl config current-context 2>/dev/null || echo "unknown")
-    echo -e "${GREEN}${CHECK} Now connected to: ${WHITE}$new_context${NC}"
+    echo -e "${GRAY}Context: ${WHITE}$(kubectl config current-context 2>/dev/null || echo "unknown")${NC}"
 }
 
 launch_k9s() {
-    echo -e "\n${ROCKET} ${GREEN}Launching k9s...${NC}"
-    echo -e "${YELLOW}💡 Tip: Press '0' to return to this menu${NC}"
-    echo -e "${BLUE}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    echo -e "${BLUE}────────────────────────────────────────────${NC}"
+    echo -e "${GREEN}Launching k9s...${NC}"
+    echo -e "${GRAY}Press '0' to return to menu${NC}"
+    echo -e "${BLUE}────────────────────────────────────────────${NC}"
+    echo ""
     
+    clear
     k9s
     
-    echo -e "${BLUE}────────────────────────────────────────────────────────────${NC}"
-    echo -e "${GREEN}${BACK} Welcome back! Select another cluster or exit.${NC}"
+    echo ""
+    echo -e "${BLUE}────────────────────────────────────────────${NC}"
+    echo -e "${BLUE}Back to menu${NC}"
+    echo -e "${BLUE}────────────────────────────────────────────${NC}"
     echo ""
 }
 
+# ============================================
+# MAIN LOOP
+# ============================================
+
 main_loop() {
     while true; do
-        show_simple_menu
+        show_optimized_menu
         
-        if [ ${#cluster_map[@]} -eq 0 ]; then
-            echo -e "${RED}❌ No clusters available. Check your Rancher directory.${NC}"
-            exit 1
+        if [ $? -ne 0 ]; then
+            echo -n -e "${BLUE}Select option (r/s/k/q): ${NC}"
+        else
+            echo -n -e "${BLUE}Select (1-${#clusters[@]}/r/s/k/q): ${NC}"
         fi
         
-        echo -n -e "${CYAN}${ARROW} Your choice (1-${#cluster_map[@]}, r, q): ${NC}"
-        read choice
+        read -r choice
         
         case $choice in
             [1-9]|[1-9][0-9])
-                if [ -n "${cluster_map[$choice]}" ]; then
-                    selected_cluster="${cluster_map[$choice]}"
-                    switch_to_cluster "$selected_cluster"
+                local idx=$((choice-1))
+                if [ -n "${clusters[$idx]}" ]; then
+                    switch_to_cluster "${clusters[$idx]}"
                     launch_k9s
                 else
-                    echo -e "${RED}❌ Invalid selection. Please try again.${NC}"
+                    echo -e "${RED}Invalid selection${NC}"
                     sleep 1
                 fi
                 ;;
             r|R)
-                echo -e "${YELLOW}${REFRESH} Refreshing cluster list...${NC}"
-                sleep 1
+                echo -e "${GRAY}Refreshing...${NC}"
+                sleep 0.3
+                ;;
+            s|S)
+                setup_initial_config
+                ;;
+            k|K)
+                check_and_install_k9s
                 ;;
             q|Q)
-                echo -e "${GREEN}${EXIT} Thank you for using k9s Cluster Manager!${NC}"
-                echo ""
+                echo -e "\n${GREEN}Goodbye!${NC}"
                 exit 0
                 ;;
             *)
-                echo -e "${RED}❌ Invalid choice. Please enter a number (1-${#cluster_map[@]}), 'r', or 'q'.${NC}"
-                sleep 1.5
+                echo -e "${RED}Invalid choice${NC}"
+                sleep 1
                 ;;
         esac
     done
 }
 
-# Check if rancher directory exists
-if [ ! -d "$RANCHER_DIR" ]; then
-    echo -e "${RED}❌ Rancher directory not found: $RANCHER_DIR${NC}"
-    echo -e "${YELLOW}Please check if the directory exists and contains your cluster configs${NC}"
-    exit 1
+# ============================================
+# STARTUP - NO MANUAL KEY PRESSES
+# ============================================
+
+clear
+echo -e "${BLUE}K9S CLUSTER SWITCHER${NC}"
+echo ""
+
+# Check and install k9s if needed
+check_and_install_k9s
+
+# Check if setup needs to run
+if [ ! -f "$SETUP_FLAG_FILE" ] || [ ! -d "$RANCHER_DIR" ] || [ $(find "$RANCHER_DIR" -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | wc -l) -eq 0 ]; then
+    echo -e "${BLUE}Running first-time setup...${NC}"
+    setup_initial_config
+else
+    cluster_count=$(find "$RANCHER_DIR" -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | wc -l | tr -d ' ')
+    echo -e "${GREEN}Loaded $cluster_count clusters${NC}"
+    sleep 0.5
+    clear
 fi
 
-# Check if k9s is installed
-if ! command -v k9s &> /dev/null; then
-    echo -e "${RED}❌ k9s is not installed. Please install k9s first.${NC}"
-    exit 1
-fi
-
-# Global variables
-cluster_map=()
-
-# Start the main loop
+# Start main loop
 main_loop

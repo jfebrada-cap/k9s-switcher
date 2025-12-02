@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Config
+clusters:
+- name: "kyc-v5-production"
+  cluster:
+    server: "https://rancher.mynt.xyz/k8s/clusters/c-58s4b"
+    certificate-authority-data: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ2VENDQ\
+      VdPZ0F3SUJBZ0lCQURBS0JnZ3Foa2pPUFFRREFqQkdNUnd3R2dZRFZRUUtFeE5rZVc1aGJXbGoKY\
+      kdsemRHVnVaWEl0YjNKbk1TWXdKQVlEVlFRRERCMWtlVzVoYldsamJHbHpkR1Z1WlhJdFkyRkFNV\
+      FkzT1RJNQpOak16TURBZUZ3MHlNekF6TWpBd056RXlNVEJhRncwek16QXpNVGN3TnpFeU1UQmFNR\
+      Vl4SERBYUJnTlZCQW9UCkUyUjVibUZ0YVdOc2FYTjBaVzVsY2kxdmNtY3hKakFrQmdOVkJBTU1IV\
+      1I1Ym1GdGFXTnNhWE4wWlc1bGNpMWoKWVVBeE5qYzVNamsyTXpNd01Ga3dFd1lIS29aSXpqMENBU\
+      VlJS29aSXpqMERBUWNEUWdBRXU4dUNGb2p6UjBuSgpHbEU0NUYyaTNRRmdsMW81cVAzaFROTHJiK\
+      0J5Z21QaGVSZmlLR1E4bjI1a1lva1V3aFBERTJYNkNpQjVic09pCll3WHZla2NuM0tOQ01FQXdEZ\
+      1lEVlIwUEFRSC9CQVFEQWdLa01BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0hRWUQKVlIwT0JCWUVGQ\
+      XJMbzFiWmV0VGhPZEdpRHNYbjNpV2xaeUNmTUFvR0NDcUdTTTQ5QkFNQ0EwZ0FNRVVDSVFEdgpJZ\
+      VR6OVVWdkJVbnJqMWZYM2x2ZTZwUnFVUlVZQWx2MnNaTlR2Y3NwcUFJZ1dON1JabkZIZldCRjFxZ\
+      GdLekw0Clg5aVluYklTU0hqeU1ZOStnN3FUbWdVPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0t"
+
+users:
+- name: "kyc-v5-production"
+  user:
+    token: "kubeconfig-u-dt5l5ntabz8q2pn:knbhv4tk7b2r2b78z5rf5vdzggmn9d4pc492w6h4zd49krxpp7j99j"
+
+
+contexts:
+- name: "kyc-v5-production"
+  context:
+    user: "kyc-v5-production"
+    cluster: "kyc-v5-production"
+
+current-context: "kyc-v5-production"

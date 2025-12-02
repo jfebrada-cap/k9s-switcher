@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================
-# K9S CLUSTER SWITCHER - AUTO LOAD
+# K9S CLUSTER SWITCHER 
 # ============================================
 
 # Configuration

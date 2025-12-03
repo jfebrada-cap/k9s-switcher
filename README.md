@@ -148,34 +148,13 @@ which k9s         # Should show a path
 python3 --version # Should show Python 3.x
 ```
 
----
 
-## 💡 Pro Tips
-
-1. **Quick Access**: Add an alias to your shell:
+**Quick Access**: Add an alias to your shell:
    ```bash
    echo "alias k9s-switch='cd ~/k9s-switcher && ./k9s_cluster_switcher.sh'" >> ~/.zshrc
    source ~/.zshrc
    # Now just type: k9s-switch
    ```
 
-2. **Fast Navigation**: Use `f` + partial name instead of scrolling through 50+ clusters
+**Fast Navigation**: Use `f` + partial name instead of scrolling through 50+ clusters
 
-3. **Need Help?** 
-   - Check the GitHub repo: https://github.com/jfebrada-cap/k9s-switcher
-   - Make sure you have the latest version
-   - All tools installed? Run the prerequisites section again
-
----
-
-## 📞 Support
-
-Having issues? Make sure:
-1. ✅ All prerequisites are installed
-2. ✅ You're in the correct directory
-3. ✅ You have the latest version
-
-Still stuck? The tool will guide you with helpful error messages.
-
-**Happy clustering! 🚀**
-```

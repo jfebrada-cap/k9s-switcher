@@ -40,12 +40,12 @@ cd k9s-switcher
 
 ### Step 2: Make it Executable
 ```bash
-chmod +x k9s_cluster_switcher.sh
+chmod +x k9s_cluster_manager.sh
 ```
 
 ### Step 3: Run It!
 ```bash
-./k9s_cluster_switcher.sh
+./k9s_cluster_manager.sh
 ```
 
 ---
@@ -57,7 +57,7 @@ Already using an older version? Update in one command:
 ```bash
 cd /path/to/your/k9s-switcher
 git pull origin main
-./k9s_cluster_switcher.sh
+./k9s_cluster_manager.sh
 ```
 
 ---
@@ -111,7 +111,7 @@ git pull origin main
 
 ```
 k9s-switcher/
-├── k9s_cluster_switcher.sh      # Main script - run this!
+├── k9s_cluster_manager.sh      # Main script - run this!
 └── YAML/                        # Your cluster configuration files
     ├── prd/                     # Production clusters go here
     └── nprd/                    # Non-production clusters go here

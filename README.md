@@ -139,8 +139,8 @@ k9s-switcher/
 ### Quick Fixes
 ```bash
 # Force refresh all clusters
-rm ~/.kube/rancher_prod_setup_complete
-./k9s_cluster_switcher.sh
+rm ~/.kube/rancher_prod/*
+./k9s_cluster_manager.sh
 
 # Check if tools are installed
 which kubectl     # Should show a path
@@ -151,7 +151,7 @@ python3 --version # Should show Python 3.x
 
 **Quick Access**: Add an alias to your shell:
    ```bash
-   echo "alias k9s-switch='cd ~/k9s-switcher && ./k9s_cluster_switcher.sh'" >> ~/.zshrc
+   echo "alias k9s-switch='cd ~/k9s-switcher && ./k9s_cluster_manager.sh'" >> ~/.zshrc
    source ~/.zshrc
    # Now just type: k9s-switch
    ```

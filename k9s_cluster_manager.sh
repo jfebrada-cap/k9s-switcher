@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# ============================================
-# K9S CLUSTER MANAGER (macOS only) - OPTIMIZED
-# ============================================
-
 # Check if running on macOS
 if [[ "$(uname)" != "Darwin" ]]; then
     echo "Error: This script is designed to run only on macOS."
@@ -192,9 +188,6 @@ except Exception as e:
 "
 }
 
-# ============================================
-# PERFORMANCE OPTIMIZED FUNCTIONS WITH PRD/NPRD SEPARATION
-# ============================================
 
 # Single Python script to process all YAML files at once
 create_yaml_processor() {
